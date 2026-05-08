@@ -37,14 +37,12 @@ def load_items(csv_path):
     if not rows:
         return []
 
-    # 1行目にURLがなければヘッダー扱い
     start_row = 0
     if not any(c.strip().startswith(("http://", "https://")) for c in rows[0]):
         start_row = 1
 
     data_rows = rows[start_row:]
 
-    # URL列を自動検出
     url_col = None
     max_cols = max(len(r) for r in data_rows)
 
@@ -53,6 +51,7 @@ def load_items(csv_path):
             if col < len(r) and r[col].strip().startswith(("http://", "https://")):
                 url_col = col
                 break
+
         if url_col is not None:
             break
 
@@ -105,7 +104,7 @@ def save_to_wayback(url, timeout_sec):
             return True, f"OK {res.status}"
 
     except HTTPError as e:
-        # 429は「本日既に保存済み」の場合があるため、成功扱いにする
+        # 429は「本日既に保存済み」の場合があるため、成功扱い
         if e.code in (200, 201, 202, 302, 409, 429):
             return True, f"OK HTTP {e.code}"
 
@@ -158,15 +157,49 @@ def append_log(path, kind, item, result):
         )
 
 
+def append_giveup(path, item, result, attempts):
+    exists = os.path.exists(path)
+
+    with open(path, "a", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+
+        if not exists:
+            writer.writerow(
+                [
+                    "datetime_jst",
+                    "index",
+                    "pref",
+                    "name",
+                    "url",
+                    "attempts",
+                    "last_result",
+                ]
+            )
+
+        writer.writerow(
+            [
+                datetime.now(JST).isoformat(timespec="seconds"),
+                item.get("index", ""),
+                item.get("pref", ""),
+                item.get("name", ""),
+                item.get("url", ""),
+                attempts,
+                result,
+            ]
+        )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--csv", default="municipalities.csv")
     parser.add_argument("--state", default="state.json")
     parser.add_argument("--failed", default="archive_failed.json")
+    parser.add_argument("--giveup", default="archive_giveup.csv")
     parser.add_argument("--log", default="archive_log.csv")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sleep-sec", type=int, default=25)
     parser.add_argument("--timeout-sec", type=int, default=180)
+    parser.add_argument("--max-attempts", type=int, default=5)
 
     args = parser.parse_args()
 
@@ -186,12 +219,19 @@ def main():
     failed_by_url = {}
     for x in failed_list:
         url = x.get("url")
-        if url:
+        if not url:
+            continue
+
+        attempts = int(x.get("attempts", 0))
+
+        if attempts >= args.max_attempts:
+            append_giveup(args.giveup, x, x.get("last_result", "GIVEUP_ALREADY_MAX"), attempts)
+        else:
             failed_by_url[url] = x
 
     retry_items = list(failed_by_url.values())
 
-    # 失敗分だけで詰まらないよう、バッチの半分までを再試行に使う
+    # batch-size 4なら、最大2件を再試行、残り2件は新規処理
     if retry_items:
         retry_quota = min(len(retry_items), max(1, args.batch_size // 2))
     else:
@@ -231,12 +271,24 @@ def main():
 
         if ok:
             failed_by_url.pop(item["url"], None)
+
         else:
             failed_item = failed_by_url.get(item["url"], item)
+            attempts = int(failed_item.get("attempts", 0)) + 1
+
             failed_item["last_result"] = result
             failed_item["last_attempt_jst"] = datetime.now(JST).isoformat(timespec="seconds")
-            failed_item["attempts"] = int(failed_item.get("attempts", 0)) + 1
-            failed_by_url[item["url"]] = failed_item
+            failed_item["attempts"] = attempts
+
+            if attempts >= args.max_attempts:
+                append_giveup(args.giveup, failed_item, result, attempts)
+                failed_by_url.pop(item["url"], None)
+                print(
+                    f"[{item.get('index')}] GIVEUP after {attempts} attempts "
+                    f"{item.get('url')}"
+                )
+            else:
+                failed_by_url[item["url"]] = failed_item
 
         if kind == "NEW":
             processed_new += 1
