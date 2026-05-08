@@ -1,0 +1,13 @@
+checked_at_utc,index,prefecture_ja,municipality_ja,target_url,save_url,http_status,result,error
+2026-05-08T12:56:44.710059+00:00,0,北海道,札幌市,https://www.city.sapporo.jp/,https://web.archive.org/save/https://www.city.sapporo.jp/,200,OK,
+2026-05-08T12:57:00.874655+00:00,1,北海道,函館市,https://www.city.hakodate.hokkaido.jp/,https://web.archive.org/save/https://www.city.hakodate.hokkaido.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T12:58:23.931104+00:00,2,北海道,小樽市,https://www.city.otaru.lg.jp/,https://web.archive.org/save/https://www.city.otaru.lg.jp/,200,OK,
+2026-05-08T12:59:52.210295+00:00,3,北海道,旭川市,https://www.city.asahikawa.hokkaido.jp/,https://web.archive.org/save/https://www.city.asahikawa.hokkaido.jp/,,TIMEOUT,<urlopen error timed out>
+2026-05-08T13:01:15.322992+00:00,4,北海道,室蘭市,https://www.city.muroran.lg.jp/,https://web.archive.org/save/https://www.city.muroran.lg.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:03:13.131022+00:00,5,北海道,釧路市,https://www.city.kushiro.lg.jp/,https://web.archive.org/save/https://www.city.kushiro.lg.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:04:36.168982+00:00,6,北海道,帯広市,https://www.city.obihiro.hokkaido.jp/,https://web.archive.org/save/https://www.city.obihiro.hokkaido.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:07:06.619174+00:00,7,北海道,北見市,https://www.city.kitami.lg.jp/,https://web.archive.org/save/https://www.city.kitami.lg.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:09:04.363046+00:00,8,北海道,夕張市,https://www.city.yubari.lg.jp/,https://web.archive.org/save/https://www.city.yubari.lg.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:11:34.332689+00:00,9,北海道,岩見沢市,https://www.city.iwamizawa.hokkaido.jp/,https://web.archive.org/save/https://www.city.iwamizawa.hokkaido.jp/,,TIMEOUT,The read operation timed out
+2026-05-08T13:13:32.156762+00:00,10,北海道,網走市,https://www.city.abashiri.hokkaido.jp/,https://web.archive.org/save/https://www.city.abashiri.hokkaido.jp/,,TIMEOUT,<urlopen error timed out>
+2026-05-08T13:17:02.525545+00:00,11,北海道,留萌市,https://www.e-rumoi.jp/,https://web.archive.org/save/https://www.e-rumoi.jp/,200,OK,
