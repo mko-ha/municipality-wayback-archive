@@ -11,3 +11,7 @@ checked_at_utc,index,prefecture_ja,municipality_ja,target_url,save_url,http_stat
 2026-05-08T13:11:34.332689+00:00,9,北海道,岩見沢市,https://www.city.iwamizawa.hokkaido.jp/,https://web.archive.org/save/https://www.city.iwamizawa.hokkaido.jp/,,TIMEOUT,The read operation timed out
 2026-05-08T13:13:32.156762+00:00,10,北海道,網走市,https://www.city.abashiri.hokkaido.jp/,https://web.archive.org/save/https://www.city.abashiri.hokkaido.jp/,,TIMEOUT,<urlopen error timed out>
 2026-05-08T13:17:02.525545+00:00,11,北海道,留萌市,https://www.e-rumoi.jp/,https://web.archive.org/save/https://www.e-rumoi.jp/,200,OK,
+2026-05-08T13:40:05.162247+00:00,12,北海道,苫小牧市,http://www.city.tomakomai.hokkaido.jp/,https://web.archive.org/save/http://www.city.tomakomai.hokkaido.jp/,200,OK,
+2026-05-08T13:42:14.241372+00:00,13,北海道,稚内市,https://www.city.wakkanai.hokkaido.jp/,https://web.archive.org/save/https://www.city.wakkanai.hokkaido.jp/,,TIMEOUT,<urlopen error [Errno 110] Connection timed out>
+2026-05-08T13:44:53.186667+00:00,14,北海道,美唄市,http://www.city.bibai.hokkaido.jp/,https://web.archive.org/save/http://www.city.bibai.hokkaido.jp/,200,OK,
+2026-05-08T13:46:57.079602+00:00,15,北海道,芦別市,https://www.city.ashibetsu.hokkaido.jp/,https://web.archive.org/save/https://www.city.ashibetsu.hokkaido.jp/,,TIMEOUT,<urlopen error [Errno 110] Connection timed out>
