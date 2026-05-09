@@ -1,0 +1,29 @@
+[
+  {
+    "index": 17,
+    "pref": "18",
+    "name": "北海道",
+    "url": "http://www.city.akabira.hokkaido.jp/",
+    "last_result": "TIMEOUT",
+    "last_attempt_jst": "2026-05-09T09:28:34+09:00",
+    "attempts": 1
+  },
+  {
+    "index": 18,
+    "pref": "19",
+    "name": "北海道",
+    "url": "https://mombetsu.jp/",
+    "last_result": "URLERROR [Errno 104] Connection reset by peer",
+    "last_attempt_jst": "2026-05-09T09:31:22+09:00",
+    "attempts": 1
+  },
+  {
+    "index": 19,
+    "pref": "20",
+    "name": "北海道",
+    "url": "http://www.city.shibetsu.lg.jp/www/index.html",
+    "last_result": "HTTP 523",
+    "last_attempt_jst": "2026-05-09T09:31:58+09:00",
+    "attempts": 1
+  }
+]

@@ -15,3 +15,7 @@ checked_at_utc,index,prefecture_ja,municipality_ja,target_url,save_url,http_stat
 2026-05-08T13:42:14.241372+00:00,13,北海道,稚内市,https://www.city.wakkanai.hokkaido.jp/,https://web.archive.org/save/https://www.city.wakkanai.hokkaido.jp/,,TIMEOUT,<urlopen error [Errno 110] Connection timed out>
 2026-05-08T13:44:53.186667+00:00,14,北海道,美唄市,http://www.city.bibai.hokkaido.jp/,https://web.archive.org/save/http://www.city.bibai.hokkaido.jp/,200,OK,
 2026-05-08T13:46:57.079602+00:00,15,北海道,芦別市,https://www.city.ashibetsu.hokkaido.jp/,https://web.archive.org/save/https://www.city.ashibetsu.hokkaido.jp/,,TIMEOUT,<urlopen error [Errno 110] Connection timed out>
+2026-05-09T09:25:55+09:00,NEW,16,17,北海道,https://www.city.ebetsu.hokkaido.jp/,OK 200
+2026-05-09T09:28:34+09:00,NEW,17,18,北海道,http://www.city.akabira.hokkaido.jp/,TIMEOUT
+2026-05-09T09:31:22+09:00,NEW,18,19,北海道,https://mombetsu.jp/,URLERROR [Errno 104] Connection reset by peer
+2026-05-09T09:31:58+09:00,NEW,19,20,北海道,http://www.city.shibetsu.lg.jp/www/index.html,HTTP 523
