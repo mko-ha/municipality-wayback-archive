@@ -28,7 +28,7 @@ jobs:
 
       - name: Run archive batch
         run: |
-          python archive_wayback.py --batch-size 4 --sleep-sec 25 --timeout-sec 180 --max-attempts 5
+         python archive_wayback.py --csv municipalities_archive_targets.csv --batch-size 4 --sleep-sec 25 --timeout-sec 180 --max-attempts 5
 
       - name: Commit state and log
         run: |
