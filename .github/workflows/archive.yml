@@ -44,12 +44,22 @@ jobs:
           git config user.name "municipality-archive-bot"
           git config user.email "actions@github.com"
 
+          git pull --rebase --autostash origin main
+
           git add state.json
 
-          git diff --cached --quiet && echo "No state changes" && exit 0
+          if git diff --cached --quiet; then
+            echo "No state changes"
+            exit 0
+          fi
 
           git commit -m "Update archive state"
 
-          git pull --rebase --autostash origin main
+          for i in 1 2 3; do
+            git push && exit 0
+            echo "Push failed. Retry $i"
+            git pull --rebase --autostash origin main
+            sleep 5
+          done
 
-          git push
+          exit 1
