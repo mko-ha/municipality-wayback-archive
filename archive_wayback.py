@@ -2,313 +2,267 @@ import argparse
 import csv
 import json
 import os
-import socket
 import time
-from datetime import datetime, timedelta, timezone
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import Request, urlopen
-
-JST = timezone(timedelta(hours=9))
+import urllib.parse
+import urllib.request
+import urllib.error
+from datetime import datetime, timezone, timedelta
 
 
-def load_json(path, default):
+USER_AGENT = "municipality-wayback-archive-bot/1.0"
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def load_state(path):
     if not os.path.exists(path):
-        return default
+        return {"next_index": 0}
 
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            state = json.load(f)
+
+        if not isinstance(state, dict):
+            return {"next_index": 0}
+
+        if "next_index" not in state:
+            state["next_index"] = 0
+
+        return state
+
     except Exception:
-        return default
+        return {"next_index": 0}
 
 
-def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def save_state(path, state):
+    tmp_path = path + ".tmp"
+
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        json.load(f)
+
+    os.replace(tmp_path, path)
 
 
-def load_items(csv_path):
+def normalize_url(url):
+    url = (url or "").strip()
+    if not url:
+        return ""
+
+    url = url.split("#", 1)[0].strip()
+
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+
+    parsed = urllib.parse.urlsplit(url)
+
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path or "/"
+
+    if not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
+        path += "/"
+
+    return urllib.parse.urlunsplit((scheme, netloc, path, "", ""))
+
+
+def read_targets(csv_path):
+    targets = []
+
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.reader(f))
+        reader = csv.DictReader(f)
 
-    rows = [r for r in rows if any(c.strip() for c in r)]
+        for row in reader:
+            url = normalize_url(row.get("url", ""))
+            if not url:
+                continue
 
-    if not rows:
-        return []
+            name = (
+                row.get("name")
+                or row.get("municipality")
+                or row.get("自治体名")
+                or row.get("prefecture")
+                or ""
+            ).strip()
 
-    start_row = 0
-    if not any(c.strip().startswith(("http://", "https://")) for c in rows[0]):
-        start_row = 1
-
-    data_rows = rows[start_row:]
-
-    url_col = None
-    max_cols = max(len(r) for r in data_rows)
-
-    for col in range(max_cols):
-        for r in data_rows[:30]:
-            if col < len(r) and r[col].strip().startswith(("http://", "https://")):
-                url_col = col
-                break
-
-        if url_col is not None:
-            break
-
-    if url_col is None:
-        raise RuntimeError("CSV内にURL列が見つかりません")
-
-    items = []
-
-    for i, r in enumerate(data_rows):
-        if url_col >= len(r):
-            continue
-
-        url = r[url_col].strip()
-
-        if not url.startswith(("http://", "https://")):
-            continue
-
-        labels = []
-        for j, cell in enumerate(r):
-            if j != url_col and cell.strip():
-                labels.append(cell.strip())
-
-        pref = labels[0] if len(labels) >= 1 else ""
-        name = labels[1] if len(labels) >= 2 else ""
-
-        items.append(
-            {
-                "index": i,
-                "pref": pref,
+            targets.append({
                 "name": name,
                 "url": url,
-            }
-        )
+            })
 
-    return items
+    return targets
 
 
-def save_to_wayback(url, timeout_sec):
-    save_url = "https://web.archive.org/save/" + quote(url, safe=":/?&=%#")
-
-    req = Request(
-        save_url,
+def http_get(url, timeout):
+    req = urllib.request.Request(
+        url,
         headers={
-            "User-Agent": "municipality-archive-bot/1.0"
+            "User-Agent": USER_AGENT,
         },
     )
 
+    with urllib.request.urlopen(req, timeout=timeout) as res:
+        status = getattr(res, "status", None) or res.getcode()
+        body = res.read()
+        return status, body
+
+
+def get_latest_cdx_timestamp(url, timeout):
+    params = urllib.parse.urlencode({
+        "url": url,
+        "output": "json",
+        "fl": "timestamp,original,statuscode,mimetype",
+        "filter": "statuscode:200",
+        "limit": "1",
+        "sort": "reverse",
+    })
+
+    cdx_url = "https://web.archive.org/cdx/search/cdx?" + params
+
     try:
-        with urlopen(req, timeout=timeout_sec) as res:
-            return True, f"OK {res.status}"
+        status, body = http_get(cdx_url, timeout)
+        if status != 200:
+            return None
 
-    except HTTPError as e:
-        # 429は「本日既に保存済み」の場合があるため、成功扱い
-        if e.code in (200, 201, 202, 302, 409, 429):
-            return True, f"OK HTTP {e.code}"
+        data = json.loads(body.decode("utf-8", errors="replace"))
 
-        return False, f"HTTP {e.code}"
+        if not isinstance(data, list) or len(data) < 2:
+            return None
 
-    except (socket.timeout, TimeoutError):
-        return False, "TIMEOUT"
+        row = data[1]
 
-    except URLError as e:
-        reason = str(e.reason)
+        if not row:
+            return None
 
-        if "timed out" in reason.lower():
-            return False, "TIMEOUT"
+        return row[0]
 
-        return False, f"URLERROR {reason}"
+    except Exception:
+        return None
+
+
+def timestamp_to_datetime(ts):
+    try:
+        return datetime.strptime(ts, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def is_recent_archive(ts, recent_days):
+    dt = timestamp_to_datetime(ts)
+    if not dt:
+        return False
+
+    return dt >= now_utc() - timedelta(days=recent_days)
+
+
+def save_to_wayback(url, timeout):
+    save_url = "https://web.archive.org/save/" + url
+
+    try:
+        status, _ = http_get(save_url, timeout)
+        return status, None
+
+    except urllib.error.HTTPError as e:
+        return e.code, str(e)
 
     except Exception as e:
-        return False, f"ERROR {type(e).__name__}: {e}"
+        return None, str(e)
 
 
-def append_log(path, kind, item, result):
-    exists = os.path.exists(path)
+def make_batch(targets, start_index, batch_size):
+    total = len(targets)
+    batch = []
 
-    with open(path, "a", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
+    for i in range(batch_size):
+        idx = (start_index + i) % total
+        batch.append((idx, targets[idx]))
 
-        if not exists:
-            writer.writerow(
-                [
-                    "datetime_jst",
-                    "kind",
-                    "index",
-                    "pref",
-                    "name",
-                    "url",
-                    "result",
-                ]
-            )
-
-        writer.writerow(
-            [
-                datetime.now(JST).isoformat(timespec="seconds"),
-                kind,
-                item.get("index", ""),
-                item.get("pref", ""),
-                item.get("name", ""),
-                item.get("url", ""),
-                result,
-            ]
-        )
-
-
-def append_giveup(path, item, result, attempts):
-    exists = os.path.exists(path)
-
-    with open(path, "a", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-
-        if not exists:
-            writer.writerow(
-                [
-                    "datetime_jst",
-                    "index",
-                    "pref",
-                    "name",
-                    "url",
-                    "attempts",
-                    "last_result",
-                ]
-            )
-
-        writer.writerow(
-            [
-                datetime.now(JST).isoformat(timespec="seconds"),
-                item.get("index", ""),
-                item.get("pref", ""),
-                item.get("name", ""),
-                item.get("url", ""),
-                attempts,
-                result,
-            ]
-        )
+    return batch
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--csv", default="municipalities.csv")
+    parser.add_argument("--csv", required=True)
     parser.add_argument("--state", default="state.json")
-    parser.add_argument("--failed", default="archive_failed.json")
-    parser.add_argument("--giveup", default="archive_giveup.csv")
-    parser.add_argument("--log", default="archive_log.csv")
     parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--sleep-sec", type=int, default=25)
+    parser.add_argument("--sleep-sec", type=int, default=30)
     parser.add_argument("--timeout-sec", type=int, default=180)
-    parser.add_argument("--max-attempts", type=int, default=5)
-
+    parser.add_argument("--max-attempts", type=int, default=2)
+    parser.add_argument("--recent-days", type=int, default=3)
     args = parser.parse_args()
 
-    items = load_items(args.csv)
+    targets = read_targets(args.csv)
 
-    if not items:
-        raise RuntimeError("処理対象URLがありません")
+    if not targets:
+        raise RuntimeError("No targets found in CSV")
 
-    state = load_json(args.state, {"next_index": 0})
-    next_index = int(state.get("next_index", 0))
+    state = load_state(args.state)
 
-    if next_index >= len(items):
-        next_index = 0
+    total = len(targets)
+    next_index = int(state.get("next_index", 0)) % total
 
-    failed_list = load_json(args.failed, [])
+    print(f"TOTAL: {total}")
+    print(f"START_INDEX: {next_index}")
+    print(f"BATCH_SIZE: {args.batch_size}")
 
-    failed_by_url = {}
-    for x in failed_list:
-        url = x.get("url")
-        if not url:
+    batch = make_batch(targets, next_index, args.batch_size)
+
+    for idx, target in batch:
+        name = target["name"]
+        url = target["url"]
+
+        label = f"[{idx + 1}/{total}] {name} {url}".strip()
+        print(f"START {label}")
+
+        before_ts = get_latest_cdx_timestamp(url, args.timeout_sec)
+
+        if before_ts and is_recent_archive(before_ts, args.recent_days):
+            print(f"SKIP_RECENT {label} latest={before_ts}")
             continue
 
-        attempts = int(x.get("attempts", 0))
+        save_ok = False
 
-        if attempts >= args.max_attempts:
-            append_giveup(args.giveup, x, x.get("last_result", "GIVEUP_ALREADY_MAX"), attempts)
-        else:
-            failed_by_url[url] = x
+        for attempt in range(1, args.max_attempts + 1):
+            status, error = save_to_wayback(url, args.timeout_sec)
 
-    retry_items = list(failed_by_url.values())
+            if status and 200 <= status < 400:
+                print(f"SAVE_REQUEST_OK {label} status={status} attempt={attempt}")
+                save_ok = True
+                break
 
-    # batch-size 4なら、最大2件を再試行、残り2件は新規処理
-    if retry_items:
-        retry_quota = min(len(retry_items), max(1, args.batch_size // 2))
-    else:
-        retry_quota = 0
+            print(f"SAVE_FAILED {label} status={status} attempt={attempt} error={error}")
 
-    new_quota = args.batch_size - retry_quota
+            if attempt < args.max_attempts:
+                time.sleep(args.sleep_sec)
 
-    batch = []
-
-    for item in retry_items[:retry_quota]:
-        batch.append(("RETRY", item))
-
-    new_items = []
-    cursor = next_index
-
-    while len(new_items) < new_quota and len(new_items) < len(items):
-        new_items.append(items[cursor])
-        cursor += 1
-
-        if cursor >= len(items):
-            cursor = 0
-
-    for item in new_items:
-        batch.append(("NEW", item))
-
-    processed_new = 0
-
-    for n, (kind, item) in enumerate(batch):
-        ok, result = save_to_wayback(item["url"], args.timeout_sec)
-
-        print(
-            f"[{item.get('index')}] {item.get('pref', '')} {item.get('name', '')} "
-            f"{kind} {result} {item.get('url')}"
-        )
-
-        append_log(args.log, kind, item, result)
-
-        if ok:
-            failed_by_url.pop(item["url"], None)
-
-        else:
-            failed_item = failed_by_url.get(item["url"], item)
-            attempts = int(failed_item.get("attempts", 0)) + 1
-
-            failed_item["last_result"] = result
-            failed_item["last_attempt_jst"] = datetime.now(JST).isoformat(timespec="seconds")
-            failed_item["attempts"] = attempts
-
-            if attempts >= args.max_attempts:
-                append_giveup(args.giveup, failed_item, result, attempts)
-                failed_by_url.pop(item["url"], None)
-                print(
-                    f"[{item.get('index')}] GIVEUP after {attempts} attempts "
-                    f"{item.get('url')}"
-                )
-            else:
-                failed_by_url[item["url"]] = failed_item
-
-        if kind == "NEW":
-            processed_new += 1
-
-        if n < len(batch) - 1:
+        if not save_ok:
+            print(f"GIVE_UP {label}")
             time.sleep(args.sleep_sec)
+            continue
 
-    next_index += processed_new
+        time.sleep(args.sleep_sec)
 
-    while next_index >= len(items):
-        next_index -= len(items)
+        after_ts = get_latest_cdx_timestamp(url, args.timeout_sec)
 
-    state["next_index"] = next_index
+        if after_ts and after_ts != before_ts:
+            print(f"ARCHIVED_CONFIRMED {label} latest={after_ts}")
+        elif after_ts:
+            print(f"PENDING_OR_ALREADY_SAME {label} latest={after_ts}")
+        else:
+            print(f"PENDING_NOT_REFLECTED {label}")
 
-    save_json(args.state, state)
-    save_json(args.failed, list(failed_by_url.values()))
+        time.sleep(args.sleep_sec)
 
-    print(f"Processed: {len(batch)}")
-    print(f"Next index: {next_index}")
-    print(f"Failed queue: {len(failed_by_url)}")
+    state["next_index"] = (next_index + args.batch_size) % total
+    state["updated_at"] = now_utc().isoformat()
+
+    save_state(args.state, state)
+
+    print(f"NEXT_INDEX: {state['next_index']}")
 
 
 if __name__ == "__main__":
