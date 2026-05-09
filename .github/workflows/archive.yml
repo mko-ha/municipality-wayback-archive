@@ -15,7 +15,7 @@ concurrency:
 jobs:
   archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -33,9 +33,9 @@ jobs:
           python archive_wayback.py \
             --csv municipalities_archive_targets.csv \
             --state state.json \
-            --batch-size 4 \
+            --batch-size 5 \
             --sleep-sec 30 \
-            --timeout-sec 180 \
+            --timeout-sec 90 \
             --max-attempts 2 \
             --recent-days 3
 
